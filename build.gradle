@@ -1,0 +1,83 @@
+buildscript {
+    repositories {
+        mavenCentral()
+    }
+    dependencies {
+        classpath("org.springframework.boot:spring-boot-gradle-plugin:1.5.19.RELEASE")
+    }
+}
+
+/*
+plugins {
+  id "org.jdrupes.mdoclet" version "1.0.3"
+}
+*/
+
+String propValue(String propName, String defValue) {
+    (project.hasProperty(propName) && project.getProperty(propName)) ? project.getProperty(propName) : defValue
+}
+
+version = propValue("ci_version","master");
+group = "com.softwareplumbers.oss"
+
+apply plugin: 'java'
+apply plugin: 'maven'
+apply plugin: 'org.springframework.boot'
+apply plugin: 'io.spring.dependency-management'
+
+test {
+	systemProperties = System.properties
+	testLogging {
+        events "passed", "skipped", "failed"
+    }
+}
+
+javadoc {
+    source = sourceSets.main.allJava
+    classpath = configurations.compile
+}
+
+jar {
+	enabled = true
+}
+
+task sourcesJar(type: Jar, dependsOn: classes) {
+	classifier 'sources'
+	from sourceSets.main.allSource
+}
+
+
+artifacts {
+	archives sourcesJar 
+}
+
+test {
+    testLogging {
+        events "passed", "skipped", "failed"
+    }
+}
+
+repositories {
+	maven { url propValue("proxyMavenCentral", "https://repo.maven.apache.org/maven2/") }
+  maven { url 'https://nexus.softwareplumbers.com/repository/maven-oss' }
+}
+
+uploadArchives {
+  repositories {
+    mavenDeployer {
+      repository(url: "https://nexus.softwareplumbers.com/repository/maven-oss") {
+      	authentication(userName: propValue("mavenUploadUser",""), password: propValue("mavenUploadPassword",""))
+      }
+    }
+  }
+}
+
+sourceCompatibility = 1.8
+targetCompatibility = 1.8
+
+dependencies {
+    compile group: 'org.bouncycastle', name: 'bcprov-jdk15on', version: '1.54'
+    compile group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: '1.54'
+    testCompile group: 'junit', name: 'junit', version: '4.12'  
+    testCompile("org.springframework.boot:spring-boot-starter-test")
+}
