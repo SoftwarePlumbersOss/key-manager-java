@@ -37,6 +37,10 @@ javadoc {
     classpath = configurations.compile
 }
 
+bootRepackage {
+	enabled = false
+}
+
 jar {
 	enabled = true
 }
@@ -78,6 +82,8 @@ targetCompatibility = 1.8
 dependencies {
     compile group: 'org.bouncycastle', name: 'bcprov-jdk15on', version: '1.54'
     compile group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: '1.54'
+    compile group: 'org.slf4j', name: 'slf4j-api'
     testCompile group: 'junit', name: 'junit', version: '4.12'  
+    testCompile group: 'commons-logging', name: 'commons-logging'
     testCompile("org.springframework.boot:spring-boot-starter-test")
 }

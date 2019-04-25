@@ -40,7 +40,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-public class KeyManager<Keys extends Enum<Keys>, KeyPairs extends Enum<KeyPairs>> {
+/** Key Manager
+ * 
+ * Manages both public/private key pairs and secret keys.
+ * 
+ * @author SWPNET\jonessex
+ *
+ * @param <RequiredSecretKeys> Enumeration of secret keys that must exist in the store (missing ones will be created)
+ * @param <RequiredKeyPairs> Enumeration of public/private keys that must exist in the store (missing ones will be created)
+ */
+public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, RequiredKeyPairs extends Enum<RequiredKeyPairs>> {
     
         
     public static final String PRIVATE_KEY_SIGNATURE_ALGORITHM = "HmacSHA256";
@@ -178,15 +187,23 @@ public class KeyManager<Keys extends Enum<Keys>, KeyPairs extends Enum<KeyPairs>
         
     }
     
-    public KeyPair getKeyPair(KeyPairs name) {
+    public KeyPair getKeyPair(RequiredKeyPairs name) {
         return getKeyPair(name.name());
     }
     
-    public Key getKey(Keys keyname) {
+    public Key getKey(RequiredSecretKeys keyname) {
         return getKey(keyname.name());
     }
     
-    public KeyManager(String location, String password, Class<Keys> keys, Class<KeyPairs> keyPairs) throws KeyStoreException {
+    /** Create a Key Manager. 
+     * 
+     * @param location The location (Path) for the key store
+     * @param password The password for the key store
+     * @param keys An enumeration of secret key names to create in the key store
+     * @param keyPairs An enumeration of public/private key pairs to create in the key store
+     * @throws KeyStoreException
+     */
+    public KeyManager(String location, String password, Class<RequiredSecretKeys> keys, Class<RequiredKeyPairs> keyPairs) throws KeyStoreException {
 
         LOG.trace("entering constructor with ({},{})", location, "<redacted>");
 

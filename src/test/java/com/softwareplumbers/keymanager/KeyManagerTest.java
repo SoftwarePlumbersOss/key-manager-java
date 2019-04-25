@@ -12,10 +12,22 @@ import java.security.KeyStoreException;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.context.ApplicationContext;
+import org.springframework.context.annotation.ImportResource;
+import org.springframework.test.context.junit4.SpringRunner;
 
-public class KeyStoreTest {
+@RunWith(SpringRunner.class)
+@ImportResource({"classpath*:services.xml"})
+@EnableConfigurationProperties
+public class KeyManagerTest {
     
-    Path file;
+    private Path file;
+    
+    @Autowired
+    private ApplicationContext springContext;
     
     @Before
     public void setup() {
@@ -41,6 +53,13 @@ public class KeyStoreTest {
         KeyManager<TestSecretKey,TestKeyPair> kmgr2 = new KeyManager<>(file.toString(), "password", TestSecretKey.class, TestKeyPair.class);
         Key key2 = kmgr2.getKey(TestSecretKey.MySecretKeyA);
         assertEquals(key1,key2);
+    }
+    
+    @Test
+    public void testKeyManagerAsSpringBean() {
+        KeyManager<?,?> kmgr = springContext.getBean("keymgr", KeyManager.class);
+        Key key = kmgr.getKey(TestSecretKey.MySecretKeyA.name());
+        assertNotNull(key);
     }
 }
 
