@@ -44,6 +44,13 @@ import org.slf4j.LoggerFactory;
  * 
  * Manages both public/private key pairs and secret keys.
  * 
+ * Given two enumerations of keys and key pairs, KeyManager tries to ensure that keys exist for all
+ * the specified keys, creating them if they do not already exist in the underlying key store.
+ * 
+ * Note the paired getKey and getKeyPair methods, which take either a string or enumeration argument.
+ * The versions taking a string argument may throw a BadKeyException if the expected key/key pair does
+ * not exist. The versions taking an enum argument should always, in principle, return a valid key.
+ * 
  * @author SWPNET\jonessex
  *
  * @param <RequiredSecretKeys> Enumeration of secret keys that must exist in the store (missing ones will be created)
@@ -64,13 +71,11 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     
     private KeyStore keystore; 
     
-    /** Generate a certificate for the default service account.
+    /** Generate a self-signed certificate for a given name and public/private key pair.
      * 
-     * This is really only for creating a runnable test setup.
-     * 
-     * @param subjectDN
-     * @param pair
-     * @return
+     * @param account The common name for the certificate
+     * @param pair A public/private key pair
+     * @return A self-signed X509 Certificate with 3 years of validity
      * @throws CertIOException
      * @throws OperatorCreationException
      * @throws CertificateException 
@@ -107,13 +112,19 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     
     /** Initialize the key store.
      * 
-     * Creates a new, default key store for the manager to use. It will contain a randomly-generated
-     * secret signing key, and a randomly generated public/private key pair under the name 'defaultServiceAccount'.
+     * Ensures a key store contains mandatory keys and key pairs. 
      * 
-     * The generated private key can be used to sign service requests passed to the auth/service endpoint, in order
-     * to obtain an access token to use the API.
+     * For each item in the given key enum, the key store will contain a randomly-generated
+     * secret signing key
      * 
-     * @param keystore
+     * For each item in the given key pair enum, the key store will contain 
+     * a randomly generated public/private key pair.
+     * 
+     * Existing keys in the key store are not updated.
+     * 
+     * @param keystore Key store
+     * @param keys Mandatory public or secret keys in keystore
+     * @param keyPairs Mandatory public/private key pairs in keystore
      */
     private static <Keys extends Enum<Keys>, KeyPairs extends Enum<KeyPairs>> boolean init(KeyStore keystore, Class<Keys> keys, Class<KeyPairs> keyPairs) {
         LOG.trace("entering init with ({},{},{})", "<keystore>", keys, keyPairs );
@@ -152,7 +163,13 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         return updated; 
     }
     
-    public Key getKey(String name) {
+    /** Get a key from the key store.
+     * 
+     * @param name the key alias
+     * @return The associated key
+     * @throws BadKeyException if the given key cannot be found
+     */
+    public Key getKey(String name) throws BadKeyException {
         LOG.trace("entering getKey with {}", name);
         try {
             if (keystore.isCertificateEntry(name)) {
@@ -173,7 +190,13 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         } 
     }
     
-    public KeyPair getKeyPair(String name) {
+    /** Get a key pair from the key store.
+     * 
+     * @param name the key alias
+     * @return The associated key pair
+     * @throws BadKeyException if the given key pair cannot be found
+     */
+    public KeyPair getKeyPair(String name) throws BadKeyException {
         LOG.trace("entering getKeyPair with {}", name);
         try {
             Key key = keystore.getKey(name, KEY_PASSWORD.getPassword());
@@ -182,17 +205,36 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
             return new KeyPair(cert.getPublicKey(), (PrivateKey)key);
         } catch (NoSuchAlgorithmException | UnrecoverableEntryException | KeyStoreException e) {
             LOG.debug("getKeyPair rethrows {}", e);
-            throw new RuntimeException(e);
+            throw new BadKeyException(e);
         } 
         
     }
-    
+  
+    /** Get a key pair from the key store.
+     * 
+     * @param name the key alias
+     * @return The associated key pair
+     * @throws BadKeyException if the given key pair cannot be found
+     */
     public KeyPair getKeyPair(RequiredKeyPairs name) {
-        return getKeyPair(name.name());
+    	try {
+    		return getKeyPair(name.name());
+    	} catch (BadKeyException e) {
+    		throw new RuntimeException(e.getCause());
+    	}
     }
     
+    /** Get a key from the key store.
+     * 
+     * @param name the key alias
+     * @return The associated key
+     */
     public Key getKey(RequiredSecretKeys keyname) {
-        return getKey(keyname.name());
+    	try {
+    		return getKey(keyname.name());
+    	} catch (BadKeyException e) {
+    		throw new RuntimeException(e.getCause());
+    	}
     }
     
     /** Create a Key Manager. 
