@@ -5,6 +5,7 @@ image:
 stages:
   - build
   - publish
+  - downstream-builds
 
 variables:
   JDK_HOME: /etc/alternatives/java_sdk_1.8.0 
@@ -23,3 +24,9 @@ publish:
   script:
    - gradle -P ci_version=${CI_COMMIT_REF_NAME} -P mavenUploadUser=${MAVEN_UPLOAD_USER} -P mavenUploadPassword=${MAVEN_UPLOAD_PASSWORD} -Dorg.gradle.java.home=${JDK_HOME} uploadArchives
  
+deploy:
+  stage: downstream-builds
+  only: 
+    - master
+  script:
+    - "curl -X POST -F token=${DOCTANE_CORE_TRIGGER_TOKEN} -F ref=master https://projects.softwareplumbers.com/api/v4/projects/46/trigger/pipeline" 
