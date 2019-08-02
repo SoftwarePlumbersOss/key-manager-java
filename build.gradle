@@ -20,6 +20,11 @@ String propValue(String propName, String defValue) {
 version = propValue("ci_version","master");
 group = "com.softwareplumbers.oss"
 
+def SNAPSHOT_BUILDS = ["master"];
+
+if (SNAPSHOT_BUILDS.contains(version)) { version = version + "-SNAPSHOT" };
+
+
 apply plugin: 'java'
 apply plugin: 'maven'
 apply plugin: 'org.springframework.boot'
@@ -62,14 +67,18 @@ test {
 }
 
 repositories {
-	maven { url propValue("proxyMavenCentral", "https://repo.maven.apache.org/maven2/") }
-  maven { url 'https://nexus.softwareplumbers.com/repository/maven-oss' }
+    maven { url propValue("proxyMavenCentral", "https://repo.maven.apache.org/maven2/") }
+    maven { url 'https://nexus.softwareplumbers.com/repository/maven-oss' }
+    maven { url 'https://nexus.softwareplumbers.com/repository/maven-oss-snapshot' }
 }
 
 uploadArchives {
   repositories {
     mavenDeployer {
       repository(url: "https://nexus.softwareplumbers.com/repository/maven-oss") {
+      	authentication(userName: propValue("mavenUploadUser",""), password: propValue("mavenUploadPassword",""))
+      }
+      snapshotRepository(url: "https://nexus.softwareplumbers.com/repository/maven-oss-snapshot") {
       	authentication(userName: propValue("mavenUploadUser",""), password: propValue("mavenUploadPassword",""))
       }
     }
