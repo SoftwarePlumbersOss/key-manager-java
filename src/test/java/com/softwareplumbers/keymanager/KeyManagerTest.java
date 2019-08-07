@@ -56,7 +56,7 @@ public class KeyManagerTest {
     }
     
     @Test
-    public void testKeyManagerAsSpringBean() throws BadKeyException {
+    public void testKeyManagerAsSpringBean() throws BadKeyException, InitializationFailure {
         KeyManager<?,?> kmgr = springContext.getBean("keymgr", KeyManager.class);
         Key key = kmgr.getKey(TestSecretKey.MySecretKeyA.name());
         assertNotNull(key);
