@@ -337,4 +337,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         LOG.trace("exiting constructor");
     }
 
+    public KeyManager() throws KeyStoreException {
+        this("/tmp", "password", null, null);
+    }
 }
