@@ -233,10 +233,18 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         this.requiredSecretKeys = requiredSecretKeys; 
         keystore = Optional.empty(); 
     }
+
+    public void setRequiredSecretKeys(String requiredSecretKeys) throws ClassNotFoundException { 
+        setRequiredSecretKeys((Class<RequiredSecretKeys>)Class.forName(requiredSecretKeys)); 
+    }
     
     public void setRequiredKeyPairs(Class<RequiredKeyPairs> requiredKeyPairs) { 
         this.requiredKeyPairs = requiredKeyPairs; 
         keystore = Optional.empty(); 
+    }
+    
+    public void setRequiredKeyPairs(String requiredKeyPairs) throws ClassNotFoundException { 
+        setRequiredKeyPairs((Class<RequiredKeyPairs>)Class.forName(requiredKeyPairs)); 
     }
     
     /** Get a key from the key store.
