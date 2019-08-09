@@ -222,7 +222,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     
     /** Set password of keystore
      * 
-     * @param location 
+     * @param password 
      */
     public void setPassword(String password) {      
         this.password = password; 
