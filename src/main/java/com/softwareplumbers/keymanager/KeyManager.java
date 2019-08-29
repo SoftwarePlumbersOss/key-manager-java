@@ -13,6 +13,7 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
+import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
@@ -20,13 +21,15 @@ import java.security.Provider;
 import java.security.SecureRandom;
 import java.security.Security;
 import java.security.UnrecoverableEntryException;
+import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.security.cert.Certificate;
+import java.util.Base64;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Optional;
-import java.util.logging.Level;
+import java.util.stream.Stream;
 
 import javax.crypto.KeyGenerator;
 
@@ -84,7 +87,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         if (!keystore.isPresent()) {
             try {
                 keystore = Optional.of(load(location, password, requiredSecretKeys, requiredKeyPairs));
-            } catch (IOException | KeyStoreException | NoSuchAlgorithmException | NoSuchProviderException | CertificateException | OperatorCreationException e) {
+            } catch (IOException | UnrecoverableKeyException | KeyStoreException | NoSuchAlgorithmException | NoSuchProviderException | CertificateException | OperatorCreationException e) {
                 throw new InitializationFailure("could not initialize keystore on path " + location, e);
             }
         }
@@ -130,6 +133,10 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         return new JcaX509CertificateConverter().setProvider(BOUNCY_CASTLE).getCertificate(certBuilder.build(contentSigner));
     }
     
+    private static <T extends Enum<T>> String[] valuesOf(Class<T> enumClass) {
+        return Stream.of(enumClass.getEnumConstants()).map(Object::toString).toArray(String[]::new);
+    }
+    
     /** Initialize the key store.
      * 
      * Ensures a key store contains mandatory keys and key pairs. 
@@ -146,23 +153,29 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
      * @param keys Mandatory public or secret keys in keystore
      * @param keyPairs Mandatory public/private key pairs in keystore
      */
-    private static <Keys extends Enum<Keys>, KeyPairs extends Enum<KeyPairs>> boolean init(KeyStore keystore, Class<Keys> keys, Class<KeyPairs> keyPairs) throws NoSuchAlgorithmException, KeyStoreException, NoSuchProviderException, CertIOException, OperatorCreationException, CertificateException {
-        LOG.trace("entering init with ({},{},{})", "<keystore>", keys, keyPairs );
+    private static <Keys extends Enum<Keys>, KeyPairs extends Enum<KeyPairs>> boolean init(KeyStore keystore, Class<Keys> keys, Class<KeyPairs> keyPairs) throws UnrecoverableKeyException, NoSuchAlgorithmException, KeyStoreException, NoSuchProviderException, CertIOException, OperatorCreationException, CertificateException {
+        LOG.trace("entering init with ({},{},{})", "<keystore>", valuesOf(keys), valuesOf(keyPairs) );
         boolean updated = false;
+        MessageDigest md5 = MessageDigest.getInstance("MD5");
 
         SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
 
         for (Keys key : keys.getEnumConstants()) {
             if (!keystore.containsAlias(key.name())) {
+                LOG.warn("did not find {} in keystore, generating it", key.name());
                 KeyGenerator generator = KeyGenerator.getInstance(PRIVATE_KEY_SIGNATURE_ALGORITHM, BOUNCY_CASTLE);
                 generator.init(256, random);
                 keystore.setKeyEntry(key.name(), generator.generateKey(), KEY_PASSWORD.getPassword(), null);
                 updated = true;
+            } else {
+                byte[] encodedKey = keystore.getKey(key.name(), KEY_PASSWORD.getPassword()).getEncoded();
+                LOG.trace("Key {} digest {}", key.name(), Base64.getEncoder().encodeToString(md5.digest(encodedKey)));
             }
         }
 
         for (KeyPairs keypair : keyPairs.getEnumConstants()) {
             if (!keystore.containsAlias(keypair.name())) {
+                LOG.warn("did not find {} in keystore, generating it", keypair.name());
                 KeyPairGenerator keyGen = KeyPairGenerator.getInstance(PUBLIC_KEY_TYPE, BOUNCY_CASTLE);
                 keyGen.initialize(1024, random);
                 KeyPair kp = keyGen.generateKeyPair();
@@ -171,6 +184,11 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
                 certChain[0] = certificate;
                 keystore.setKeyEntry(keypair.name(), (Key) kp.getPrivate(), KEY_PASSWORD.getPassword(), certChain);
                 updated = true;
+            } else {
+                byte[] encodedKey = keystore.getKey(keypair.name(), KEY_PASSWORD.getPassword()).getEncoded();
+                LOG.trace("PrivateKey {} digest {}", keypair.name(), Base64.getEncoder().encodeToString(md5.digest(encodedKey)));
+                byte[] encodedCert = keystore.getCertificate(keypair.name()).getEncoded();
+                LOG.trace("Certificate {} digest {}", keypair.name(), Base64.getEncoder().encodeToString(md5.digest(encodedCert)));
             }
         }
       
@@ -190,7 +208,10 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         KeyStoreException, 
         NoSuchProviderException, 
         CertIOException, 
+        UnrecoverableKeyException,
         OperatorCreationException {
+        LOG.trace("entering load with ({},<password>,{},{})", location, valuesOf(keys), valuesOf(keyPairs) );
+
         File file = new File(location);
         KeyStore keystore = KeyStore.getInstance("JCEKS");
 
@@ -216,6 +237,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
      * @param location 
      */
     public void setLocation(String location) { 
+        LOG.trace("entering setLocation ({})", location);
         this.location = location; 
         keystore = Optional.empty(); 
     }
@@ -225,11 +247,13 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
      * @param password 
      */
     public void setPassword(String password) {      
+        LOG.trace("entering setPassword (<redacted>)");
         this.password = password; 
         keystore = Optional.empty(); 
     }
     
     public void setRequiredSecretKeys(Class<RequiredSecretKeys> requiredSecretKeys) { 
+        LOG.trace("entering setRequiredSecretKeys ({})", (Object)valuesOf(requiredSecretKeys));
         this.requiredSecretKeys = requiredSecretKeys; 
         keystore = Optional.empty(); 
     }
@@ -239,6 +263,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     }
     
     public void setRequiredKeyPairs(Class<RequiredKeyPairs> requiredKeyPairs) { 
+        LOG.trace("entering setRequiredKeyPairs ({})", (Object)valuesOf(requiredKeyPairs));
         this.requiredKeyPairs = requiredKeyPairs; 
         keystore = Optional.empty(); 
     }
