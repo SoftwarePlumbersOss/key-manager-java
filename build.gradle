@@ -42,6 +42,11 @@ javadoc {
     classpath = configurations.compile
 }
 
+task javadocJar(type: Jar) {
+    from javadoc
+    classifier = 'javadoc'
+}
+
 bootRepackage {
 	enabled = false
 }
@@ -58,6 +63,7 @@ task sourcesJar(type: Jar, dependsOn: classes) {
 
 artifacts {
 	archives sourcesJar 
+    archives javadocJar
 }
 
 test {
