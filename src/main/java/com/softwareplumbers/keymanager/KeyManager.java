@@ -154,6 +154,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
 
         for (Keys key : keys.getEnumConstants()) {
             if (!keystore.containsAlias(key.name())) {
+                LOG.trace("generating secret key for {}", key.name() );
                 KeyGenerator generator = KeyGenerator.getInstance(PRIVATE_KEY_SIGNATURE_ALGORITHM, BOUNCY_CASTLE);
                 generator.init(256, random);
                 keystore.setKeyEntry(key.name(), generator.generateKey(), KEY_PASSWORD.getPassword(), null);
@@ -163,6 +164,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
 
         for (KeyPairs keypair : keyPairs.getEnumConstants()) {
             if (!keystore.containsAlias(keypair.name())) {
+                LOG.trace("generating key pair for {}", keypair.name() );
                 KeyPairGenerator keyGen = KeyPairGenerator.getInstance(PUBLIC_KEY_TYPE, BOUNCY_CASTLE);
                 keyGen.initialize(1024, random);
                 KeyPair kp = keyGen.generateKeyPair();
