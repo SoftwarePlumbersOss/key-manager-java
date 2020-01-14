@@ -234,7 +234,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
 
     /** Set location of keystore
      * 
-     * @param location 
+     * @param location location (on disk...) for keystore
      */
     public void setLocation(String location) { 
         LOG.trace("entering setLocation ({})", location);
@@ -244,7 +244,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     
     /** Set password of keystore
      * 
-     * @param password 
+     * @param password the password for the keystore
      */
     public void setPassword(String password) {      
         LOG.trace("entering setPassword (<redacted>)");
@@ -305,6 +305,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
      * @param name the key alias
      * @return The associated key pair
      * @throws BadKeyException if the given key pair cannot be found
+     * @throws InitializationFailure if KeyStore cannot be created/accessed
      */
     public KeyPair getKeyPair(String name) throws BadKeyException, InitializationFailure {
         LOG.trace("entering getKeyPair with {}", name);
@@ -324,7 +325,6 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
      * 
      * @param name the key alias
      * @return The associated key pair
-     * @throws BadKeyException if the given key pair cannot be found
      */
     public KeyPair getKeyPair(RequiredKeyPairs name) {
     	try {
@@ -357,7 +357,6 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
      * @param password The password for the key store
      * @param keys An enumeration of secret key names to create in the key store
      * @param keyPairs An enumeration of public/private key pairs to create in the key store
-     * @throws KeyStoreException
      */
     public KeyManager(String location, String password, Class<RequiredSecretKeys> keys, Class<RequiredKeyPairs> keyPairs) throws KeyStoreException {
 
