@@ -7,11 +7,9 @@ buildscript {
     }
 }
 
-/*
 plugins {
-  id "org.jdrupes.mdoclet" version "1.0.3"
+  id "org.jdrupes.mdoclet" version "1.0.5"
 }
-*/
 
 String propValue(String propName, String defValue) {
     (project.hasProperty(propName) && project.getProperty(propName)) ? project.getProperty(propName) : defValue
