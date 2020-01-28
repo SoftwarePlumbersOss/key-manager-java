@@ -4,7 +4,6 @@ image:
 
 stages:
   - build
-  - publish
   - downstream-builds
 
 variables:
@@ -17,13 +16,8 @@ build:
     paths:
       - build
   script:
-   - gradle -P ci_version=${CI_COMMIT_REF_NAME} -P mavenUploadUser=${MAVEN_UPLOAD_USER} -P mavenUploadPassword=${MAVEN_UPLOAD_PASSWORD} -Dorg.gradle.java.home=${JDK_HOME} build
-     
-publish:
-  stage: publish
-  script:
-   - gradle -P ci_version=${CI_COMMIT_REF_NAME} -P mavenUploadUser=${MAVEN_UPLOAD_USER} -P mavenUploadPassword=${MAVEN_UPLOAD_PASSWORD} -Dorg.gradle.java.home=${JDK_HOME} uploadArchives
- 
+   - gradle -P ci_version=${CI_COMMIT_REF_NAME} -P mavenUploadUser=${MAVEN_UPLOAD_USER} -P mavenUploadPassword=${MAVEN_UPLOAD_PASSWORD} -Dorg.gradle.java.home=${JDK_HOME} build test uploadArchives
+      
 deploy:
   stage: downstream-builds
   only: 

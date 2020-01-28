@@ -1,15 +1,24 @@
 package com.softwareplumbers.keymanager;
 
+import java.io.File;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 import java.io.IOException;
 import java.nio.file.FileSystems;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.Key;
 import java.security.KeyStoreException;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.X509Certificate;
+import java.util.Base64;
+import java.util.stream.Stream;
 
 import org.junit.After;
+import org.junit.Assert;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertTrue;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -25,18 +34,24 @@ import org.springframework.test.context.junit4.SpringRunner;
 public class KeyManagerTest {
     
     private Path file;
+    private Path folder;
     
     @Autowired
     private ApplicationContext springContext;
     
     @Before
-    public void setup() {
-        file = FileSystems.getDefault().getPath(System.getProperty("java.io.tmpdir"), "Doctane_TEST.keystore"); 
+    public void setup() throws IOException {
+        String tmpDir = System.getProperty("java.io.tmpdir");
+        file = FileSystems.getDefault().getPath(tmpDir, "Doctane_TEST.keystore");
+        folder = FileSystems.getDefault().getPath(tmpDir, "Doctane_TEST_exports");
+        Files.createDirectories(folder);
     }
     
     @After 
-    public void cleanup() {
+    public void cleanup() throws IOException {
         file.toFile().delete();
+        Files.list(folder).forEach(path -> path.toFile().delete());
+        folder.toFile().delete();
     }
     
     @Test
@@ -44,6 +59,27 @@ public class KeyManagerTest {
         KeyManager<TestSecretKey,TestKeyPair> kmgr = new KeyManager<>(file.toString(), "password", TestSecretKey.class, TestKeyPair.class);
         Key key = kmgr.getKey(TestSecretKey.MySecretKeyA);
         assertNotNull(key);
+    }
+    
+    @Test
+    public void testCreateNewKeyStoreWithPublish() throws KeyStoreException, IOException, CertificateEncodingException {
+        KeyManager<TestSecretKey,TestKeyPair> kmgr = new KeyManager<>(file.toString(), folder.toString(), "password", TestSecretKey.class, TestKeyPair.class);
+        X509Certificate cert = kmgr.getCertificate(TestKeyPair.KeyPairA);
+        String name = cert.getSubjectDN().getName() + ".der";
+        Path certPath = folder.resolve(name);
+        assertTrue(Files.exists(certPath));
+        byte[] content = Base64.getUrlDecoder().decode(Files.readAllBytes(certPath));
+        assertArrayEquals(cert.getEncoded(), content);        
+    }
+    
+    @Test
+    public void testCreateNewKeyStoreWithImport() throws KeyStoreException, IOException, CertificateEncodingException, BadKeyException, InitializationFailure {
+        KeyManager<TestSecretKey,TestKeyPair> kmgr = new KeyManager<>(file.toString(), folder.toString(), "password", TestSecretKey.class, TestKeyPair.class);
+        X509Certificate cert = kmgr.getCertificate(TestKeyPair.KeyPairA);
+        String name = cert.getSubjectDN().getName();
+        // The cert should have been re-imported under its CN (a UUID)
+        X509Certificate cert2 = kmgr.getCertificate(name);
+        assertEquals(cert, cert2);
     }
     
     @Test

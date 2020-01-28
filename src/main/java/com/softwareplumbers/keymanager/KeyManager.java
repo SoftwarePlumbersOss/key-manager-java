@@ -32,6 +32,11 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 import javax.crypto.KeyGenerator;
+import java.security.cert.CertificateEncodingException;
+import java.security.cert.CertificateFactory;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.UUID;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -82,11 +87,12 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     private String location, password;
     
     private Optional<KeyStore> keystore = Optional.empty(); 
+    private String publishLocation = null;
     
     private KeyStore getKeyStore() throws InitializationFailure {
         if (!keystore.isPresent()) {
             try {
-                keystore = Optional.of(load(location, password, requiredSecretKeys, requiredKeyPairs));
+                keystore = Optional.of(load());
             } catch (IOException | UnrecoverableKeyException | KeyStoreException | NoSuchAlgorithmException | NoSuchProviderException | CertificateException | OperatorCreationException e) {
                 throw new InitializationFailure("could not initialize keystore on path " + location, e);
             }
@@ -153,14 +159,14 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
      * @param keys Mandatory public or secret keys in keystore
      * @param keyPairs Mandatory public/private key pairs in keystore
      */
-    private static <Keys extends Enum<Keys>, KeyPairs extends Enum<KeyPairs>> boolean init(KeyStore keystore, Class<Keys> keys, Class<KeyPairs> keyPairs) throws UnrecoverableKeyException, NoSuchAlgorithmException, KeyStoreException, NoSuchProviderException, CertIOException, OperatorCreationException, CertificateException {
-        LOG.trace("entering init with ({},{},{})", "<keystore>", valuesOf(keys), valuesOf(keyPairs) );
+    private boolean init(KeyStore keystore) throws UnrecoverableKeyException, NoSuchAlgorithmException, KeyStoreException, NoSuchProviderException, CertIOException, OperatorCreationException, CertificateException, IOException {
+        LOG.trace("entering init");
         boolean updated = false;
         MessageDigest md5 = MessageDigest.getInstance("MD5");
 
         SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
 
-        for (Keys key : keys.getEnumConstants()) {
+        for (RequiredSecretKeys key : requiredSecretKeys.getEnumConstants()) {
             if (!keystore.containsAlias(key.name())) {
                 LOG.warn("did not find {} in keystore, generating it", key.name());
                 KeyGenerator generator = KeyGenerator.getInstance(PRIVATE_KEY_SIGNATURE_ALGORITHM, BOUNCY_CASTLE);
@@ -173,16 +179,17 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
             }
         }
 
-        for (KeyPairs keypair : keyPairs.getEnumConstants()) {
+        for (RequiredKeyPairs keypair : requiredKeyPairs.getEnumConstants()) {
             if (!keystore.containsAlias(keypair.name())) {
                 LOG.warn("did not find {} in keystore, generating it", keypair.name());
                 KeyPairGenerator keyGen = KeyPairGenerator.getInstance(PUBLIC_KEY_TYPE, BOUNCY_CASTLE);
                 keyGen.initialize(1024, random);
                 KeyPair kp = keyGen.generateKeyPair();
-                X509Certificate certificate = generateCertificate(keypair.name(), kp);
+                X509Certificate certificate = generateCertificate(UUID.randomUUID().toString(), kp);
                 Certificate[] certChain = new Certificate[1];
                 certChain[0] = certificate;
                 keystore.setKeyEntry(keypair.name(), (Key) kp.getPrivate(), KEY_PASSWORD.getPassword(), certChain);
+                publishCertificate(certificate);
                 updated = true;
             } else {
                 byte[] encodedKey = keystore.getKey(keypair.name(), KEY_PASSWORD.getPassword()).getEncoded();
@@ -191,16 +198,20 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
                 LOG.trace("Certificate {} digest {}", keypair.name(), Base64.getEncoder().encodeToString(md5.digest(encodedCert)));
             }
         }
-      
+        
+        for (X509Certificate cert : importCertificates()) {
+            String name = cert.getSubjectDN().getName();
+            if (!(keystore.containsAlias(name) && keystore.isCertificateEntry(name) && keystore.getCertificate(name).equals(cert))) {
+                keystore.setCertificateEntry(name, cert);
+                updated = true;
+            }
+        }
+             
         LOG.trace("init exiting with {}", updated);
         return updated; 
     }
     
-    private static <Keys extends Enum<Keys>, KeyPairs extends Enum<KeyPairs>> KeyStore load(
-        String location, 
-        String password, 
-        Class<Keys> keys,
-        Class<KeyPairs> keyPairs) throws 
+    private <Keys extends Enum<Keys>, KeyPairs extends Enum<KeyPairs>> KeyStore load() throws 
         FileNotFoundException, 
         IOException, 
         NoSuchAlgorithmException, 
@@ -210,7 +221,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         CertIOException, 
         UnrecoverableKeyException,
         OperatorCreationException {
-        LOG.trace("entering load with ({},<password>,{},{})", location, valuesOf(keys), valuesOf(keyPairs) );
+        LOG.trace("entering load");
 
         File file = new File(location);
         KeyStore keystore = KeyStore.getInstance("JCEKS");
@@ -222,8 +233,8 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         } else {
             keystore.load(null, password.toCharArray());
         }
-
-        if (init(keystore, keys, keyPairs)) {
+        
+        if (init(keystore)) {
             try (OutputStream os = new FileOutputStream(file)) {
                 keystore.store(os, password.toCharArray());
             }
@@ -231,8 +242,45 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         
         return keystore;
     }
+    
+    private static void logCertificate(Certificate certificate) {
+        try {
+            LOG.info("Certificate created: {}", Base64.getUrlEncoder().encode(certificate.getEncoded()));
+        } catch (CertificateEncodingException e) {
+            throw new RuntimeException(e);
+        }
+    }
+    
+    private void publishCertificate(X509Certificate certificate) {
+        if (this.publishLocation != null) {
+            File certFile = new File(publishLocation, certificate.getSubjectDN().getName() + ".der");
+            try (OutputStream os = Base64.getUrlEncoder().wrap(new FileOutputStream(certFile))) {
+                os.write(certificate.getEncoded());
+            } catch (IOException | CertificateEncodingException e) {
+                throw new RuntimeException(e);
+            }
+        } else {
+            logCertificate(certificate);
+        }
+    }
+    
+    private Iterable<X509Certificate> importCertificates() throws IOException, CertificateException {
+        if (this.publishLocation != null) {
+            File publishDir = new File(publishLocation);
+            publishDir.mkdirs();
+            if (!publishDir.isDirectory() || !publishDir.canWrite()) throw new IOException("supplied publish location is unusable");
+            ArrayList<X509Certificate> certs = new ArrayList<>();
+            for (File certFile : publishDir.listFiles(file -> file.getName().matches(".*\\.der$|.*\\.DER$"))) {
+                try (InputStream is = Base64.getUrlDecoder().wrap(new FileInputStream(certFile))) {
+                   certs.add((X509Certificate)CertificateFactory.getInstance("X.509").generateCertificate(is));
+                }               
+            }
+            return certs;
+        }
+        return Collections.EMPTY_LIST;
+    }
 
-    /** Set location of keystore
+    /** Set location of keystore.
      * 
      * @param location location (on disk...) for keystore
      */
@@ -242,7 +290,18 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         keystore = Optional.empty(); 
     }
     
-    /** Set password of keystore
+    /** Set the location for publishing/retrieving public keys.
+     * 
+     * @param publishLocation location (on disk...) for exporting public keys.
+     * @throws IOException 
+     */
+    public void setPublishLocation(String publishLocation) throws IOException {
+        LOG.trace("entering setPublishLocation with {}", publishLocation);
+        this.publishLocation = publishLocation;
+        keystore = Optional.empty(); 
+    }
+    
+    /** Set password of keystore.
      * 
      * @param password the password for the keystore
      */
@@ -299,6 +358,26 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
             throw new RuntimeException(e);
         } 
     }
+
+    /** Get a certificate from the key store.
+     * 
+     * @param name the certificate alias
+     * @return The associated certificate
+     * @throws BadKeyException if the given key pair cannot be found
+     * @throws InitializationFailure if KeyStore cannot be created/accessed
+     */
+    public X509Certificate getCertificate(String name) throws BadKeyException, InitializationFailure {
+        LOG.trace("entering getCertificate with {}", name);
+        try {
+            X509Certificate cert = (X509Certificate)getKeyStore().getCertificate(name);
+            LOG.trace("getCertificate returns", "<redacted>");
+            return cert;
+        } catch (KeyStoreException e) {
+            LOG.debug("getCertificate rethrows {}", e);
+            throw new BadKeyException(e);
+        } 
+        
+    }    
     
     /** Get a key pair from the key store.
      * 
@@ -351,25 +430,57 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         }
     }
     
+    /** Get a public key from the key store.
+     * 
+     * @param keyname the key alias
+     * @return The associated key
+     */
+    public X509Certificate getCertificate(RequiredKeyPairs keyname) {
+    	try {
+    		return getCertificate(keyname.name());
+    	} catch (BadKeyException e) {
+    		throw new RuntimeException(e.getCause());
+    	} catch (InitializationFailure e) {
+            throw new RuntimeException(e.getCause());
+        }
+    }
+    
+    /** Create a Key Manager. 
+     * 
+     * @param location The location (Path) for the key store
+     * @param publishLocation The location (path to a directory) where public keys are published to and imported from
+     * @param password The password for the key store
+     * @param keys An enumeration of secret key names to create in the key store
+     * @param keyPairs An enumeration of public/private key pairs to create in the key store
+     * @throws java.security.KeyStoreException
+     */
+    public KeyManager(String location, String publishLocation, String password, Class<RequiredSecretKeys> keys, Class<RequiredKeyPairs> keyPairs) throws KeyStoreException {
+
+        LOG.trace("entering constructor with ({},{})", location, "<redacted>");
+        Security.addProvider(BOUNCY_CASTLE);
+        this.location = location;
+        this.publishLocation = publishLocation;
+        this.password = password;
+        this.requiredKeyPairs = keyPairs;
+        this.requiredSecretKeys = keys;
+        LOG.trace("exiting constructor");
+    }
+  
     /** Create a Key Manager. 
      * 
      * @param location The location (Path) for the key store
      * @param password The password for the key store
      * @param keys An enumeration of secret key names to create in the key store
      * @param keyPairs An enumeration of public/private key pairs to create in the key store
+     * @throws java.security.KeyStoreException
      */
+    @Deprecated
     public KeyManager(String location, String password, Class<RequiredSecretKeys> keys, Class<RequiredKeyPairs> keyPairs) throws KeyStoreException {
-
-        LOG.trace("entering constructor with ({},{})", location, "<redacted>");
-        Security.addProvider(BOUNCY_CASTLE);
-        this.location = location;
-        this.password = password;
-        this.requiredKeyPairs = keyPairs;
-        this.requiredSecretKeys = keys;
-        LOG.trace("exiting constructor");
+        this(location, null, password, keys, keyPairs);
     }
 
     public KeyManager() throws KeyStoreException {
-        this("/tmp", "password", null, null);
+        this("/tmp", "/tmp/certs", "password", null, null);
     }
+    
 }
