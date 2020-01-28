@@ -54,6 +54,12 @@ public class KeyManagerTest {
         folder.toFile().delete();
     }
     
+    private static String extractName(X509Certificate cert) {
+        String dn = cert.getSubjectDN().getName();
+        return (dn.startsWith("CN=") || dn.startsWith("cn=")) ? dn.substring(3) : dn; 
+    }
+    
+    
     @Test
     public void testCreateNewKeyStore() throws KeyStoreException, IOException {
         KeyManager<TestSecretKey,TestKeyPair> kmgr = new KeyManager<>(file.toString(), "password", TestSecretKey.class, TestKeyPair.class);
@@ -65,7 +71,7 @@ public class KeyManagerTest {
     public void testCreateNewKeyStoreWithPublish() throws KeyStoreException, IOException, CertificateEncodingException {
         KeyManager<TestSecretKey,TestKeyPair> kmgr = new KeyManager<>(file.toString(), folder.toString(), "password", TestSecretKey.class, TestKeyPair.class);
         X509Certificate cert = kmgr.getCertificate(TestKeyPair.KeyPairA);
-        String name = cert.getSubjectDN().getName() + ".der";
+        String name = extractName(cert) + ".der";
         Path certPath = folder.resolve(name);
         assertTrue(Files.exists(certPath));
         byte[] content = Base64.getUrlDecoder().decode(Files.readAllBytes(certPath));
@@ -76,7 +82,7 @@ public class KeyManagerTest {
     public void testCreateNewKeyStoreWithImport() throws KeyStoreException, IOException, CertificateEncodingException, BadKeyException, InitializationFailure {
         KeyManager<TestSecretKey,TestKeyPair> kmgr = new KeyManager<>(file.toString(), folder.toString(), "password", TestSecretKey.class, TestKeyPair.class);
         X509Certificate cert = kmgr.getCertificate(TestKeyPair.KeyPairA);
-        String name = cert.getSubjectDN().getName();
+        String name = extractName(cert);
         // The cert should have been re-imported under its CN (a UUID)
         X509Certificate cert2 = kmgr.getCertificate(name);
         assertEquals(cert, cert2);

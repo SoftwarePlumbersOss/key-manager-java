@@ -200,7 +200,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         }
         
         for (X509Certificate cert : importCertificates()) {
-            String name = cert.getSubjectDN().getName();
+            String name = extractName(cert);
             if (!(keystore.containsAlias(name) && keystore.isCertificateEntry(name) && keystore.getCertificate(name).equals(cert))) {
                 keystore.setCertificateEntry(name, cert);
                 updated = true;
@@ -251,9 +251,14 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         }
     }
     
+    private static String extractName(X509Certificate cert) {
+        String dn = cert.getSubjectDN().getName();
+        return (dn.startsWith("CN=") || dn.startsWith("cn=")) ? dn.substring(3) : dn; 
+    }
+    
     private void publishCertificate(X509Certificate certificate) {
         if (this.publishLocation != null) {
-            File certFile = new File(publishLocation, certificate.getSubjectDN().getName() + ".der");
+            File certFile = new File(publishLocation, extractName(certificate) + ".der");
             try (OutputStream os = Base64.getUrlEncoder().wrap(new FileOutputStream(certFile))) {
                 os.write(certificate.getEncoded());
             } catch (IOException | CertificateEncodingException e) {
