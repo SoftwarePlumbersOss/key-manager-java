@@ -258,6 +258,8 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     
     private void publishCertificate(X509Certificate certificate) {
         if (this.publishLocation != null) {
+            File publishDir = new File(publishLocation);
+            publishDir.mkdirs();
             File certFile = new File(publishLocation, extractName(certificate) + ".der");
             try (OutputStream os = Base64.getUrlEncoder().wrap(new FileOutputStream(certFile))) {
                 os.write(certificate.getEncoded());
