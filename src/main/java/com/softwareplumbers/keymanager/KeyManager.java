@@ -185,10 +185,12 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
                 KeyPairGenerator keyGen = KeyPairGenerator.getInstance(PUBLIC_KEY_TYPE, BOUNCY_CASTLE);
                 keyGen.initialize(1024, random);
                 KeyPair kp = keyGen.generateKeyPair();
-                X509Certificate certificate = generateCertificate(UUID.randomUUID().toString(), kp);
+                String cn = UUID.randomUUID().toString();
+                X509Certificate certificate = generateCertificate(cn, kp);
                 Certificate[] certChain = new Certificate[1];
                 certChain[0] = certificate;
                 keystore.setKeyEntry(keypair.name(), (Key) kp.getPrivate(), KEY_PASSWORD.getPassword(), certChain);
+                keystore.setCertificateEntry(cn, certificate);
                 publishCertificate(certificate);
                 updated = true;
             } else {
