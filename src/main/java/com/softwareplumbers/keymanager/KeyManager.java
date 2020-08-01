@@ -37,6 +37,7 @@ import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.UUID;
+import java.util.logging.Level;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -74,6 +75,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     public static final String PRIVATE_KEY_SIGNATURE_ALGORITHM = "HmacSHA256";
     public static final String PUBLIC_KEY_SIGNATURE_ALGORITHM = "SHA1withDSA";
     public static final String PUBLIC_KEY_TYPE = "DSA";
+    public static enum NO_KEYS {}; // Empty enum for case where key manager has no keys of a given type.
     
     private static final Provider BOUNCY_CASTLE = new BouncyCastleProvider();
     
@@ -88,6 +90,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     
     private Optional<KeyStore> keystore = Optional.empty(); 
     private String publishLocation = null;
+    private SecureRandom randomizer = new SecureRandom();
     
     private KeyStore getKeyStore() throws InitializationFailure {
         if (!keystore.isPresent()) {
@@ -98,6 +101,21 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
             }
         }
         return keystore.get();
+    }
+    
+    /** Generates the published name of a key pair.
+     * 
+     * Since the published name of a generated key should be unique, we add a 12 byte
+     * cryptographically secure random number to it, encoded in base-64 to keep it 
+     * short.
+     * 
+     * @param base to use
+     * @return globally unique name including base.
+     */
+    private String generatePublishedName(String base) {
+        byte[] random = new byte[12];
+        randomizer.nextBytes(random);
+        return base + Base64.getUrlEncoder().withoutPadding().encodeToString(random);
     }
     
     /** Generate a self-signed certificate for a given name and public/private key pair.
@@ -185,7 +203,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
                 KeyPairGenerator keyGen = KeyPairGenerator.getInstance(PUBLIC_KEY_TYPE, BOUNCY_CASTLE);
                 keyGen.initialize(1024, random);
                 KeyPair kp = keyGen.generateKeyPair();
-                String cn = UUID.randomUUID().toString();
+                String cn = generatePublishedName(keypair.name());
                 X509Certificate certificate = generateCertificate(cn, kp);
                 Certificate[] certChain = new Certificate[1];
                 certChain[0] = certificate;
@@ -420,6 +438,20 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     	} catch (BadKeyException e) {
     		throw new RuntimeException(e.getCause());
     	} catch (InitializationFailure e) {
+            throw new RuntimeException(e.getCause());
+        }
+    }
+    
+    /** Get the name under which we have published the public key for the given key pair 
+     * 
+     * @param name The key pair for which we need the published name
+     * @return The name.
+     */
+    public String getPublishedName(RequiredKeyPairs name) {
+        try {
+            Certificate[] certs = getKeyStore().getCertificateChain(name.name());
+            return extractName((X509Certificate)certs[0]);
+        } catch (InitializationFailure | KeyStoreException e) {
             throw new RuntimeException(e.getCause());
         }
     }
