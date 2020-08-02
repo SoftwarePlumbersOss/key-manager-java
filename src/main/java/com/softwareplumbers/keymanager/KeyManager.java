@@ -12,6 +12,10 @@ import java.security.Key;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
+import java.security.KeyStore.Entry;
+import java.security.KeyStore.PrivateKeyEntry;
+import java.security.KeyStore.SecretKeyEntry;
+import java.security.KeyStore.TrustedCertificateEntry;
 import java.security.KeyStoreException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -21,7 +25,6 @@ import java.security.Provider;
 import java.security.SecureRandom;
 import java.security.Security;
 import java.security.UnrecoverableEntryException;
-import java.security.UnrecoverableKeyException;
 import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
 import java.security.cert.Certificate;
@@ -36,8 +39,7 @@ import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.UUID;
-import java.util.logging.Level;
+import java.util.Iterator;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -96,7 +98,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         if (!keystore.isPresent()) {
             try {
                 keystore = Optional.of(load());
-            } catch (IOException | UnrecoverableKeyException | KeyStoreException | NoSuchAlgorithmException | NoSuchProviderException | CertificateException | OperatorCreationException e) {
+            } catch (IOException | UnrecoverableEntryException | KeyStoreException | NoSuchAlgorithmException | NoSuchProviderException | CertificateException | OperatorCreationException e) {
                 throw new InitializationFailure("could not initialize keystore on path " + location, e);
             }
         }
@@ -161,6 +163,38 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         return Stream.of(enumClass.getEnumConstants()).map(Object::toString).toArray(String[]::new);
     }
     
+    private static String keyDigest(Key key) {
+        try {
+            MessageDigest md5 = MessageDigest.getInstance("MD5");
+            return Base64.getEncoder().withoutPadding().encodeToString(md5.digest(key.getEncoded()));
+        } catch (NoSuchAlgorithmException e) {
+            // this API has WAAAAAY too many checked exceptions.
+            throw new RuntimeException(e);
+        }
+    }
+    
+    private static void dumpKeystore(KeyStore keystore) throws KeyStoreException, NoSuchAlgorithmException, UnrecoverableEntryException {
+        Iterator<String> aliases = keystore.aliases().asIterator();
+        while (aliases.hasNext()) {
+            String alias = aliases.next();
+            Entry entry = keystore.isCertificateEntry(alias) ? keystore.getEntry(alias, null) : keystore.getEntry(alias, KEY_PASSWORD);
+            if (entry instanceof TrustedCertificateEntry) {
+                TrustedCertificateEntry tce = (TrustedCertificateEntry)entry;
+                Key key = tce.getTrustedCertificate().getPublicKey();
+                LOG.trace("Certificate {} public key digest {}", alias, keyDigest(key));
+            } else if (entry instanceof SecretKeyEntry) {
+                SecretKeyEntry ske = (SecretKeyEntry)entry;
+                Key key = ske.getSecretKey();
+                LOG.trace("Secret key {} digest {}", alias, keyDigest(key));
+            } else if (entry instanceof PrivateKeyEntry) {
+                PrivateKeyEntry pke = (PrivateKeyEntry)entry;
+                Key privateKey = pke.getPrivateKey();
+                X509Certificate cert = (X509Certificate)pke.getCertificate();
+                LOG.trace("Private key {} cn {} private key digest {} public key digest {}", alias, extractName(cert), keyDigest(privateKey), keyDigest(cert.getPublicKey()));
+            }
+        }        
+    }
+    
     /** Initialize the key store.
      * 
      * Ensures a key store contains mandatory keys and key pairs. 
@@ -177,10 +211,9 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
      * @param keys Mandatory public or secret keys in keystore
      * @param keyPairs Mandatory public/private key pairs in keystore
      */
-    private boolean init(KeyStore keystore) throws UnrecoverableKeyException, NoSuchAlgorithmException, KeyStoreException, NoSuchProviderException, CertIOException, OperatorCreationException, CertificateException, IOException {
+    private boolean init(KeyStore keystore) throws UnrecoverableEntryException, NoSuchAlgorithmException, KeyStoreException, NoSuchProviderException, CertIOException, OperatorCreationException, CertificateException, IOException {
         LOG.trace("entering init");
         boolean updated = false;
-        MessageDigest md5 = MessageDigest.getInstance("MD5");
 
         SecureRandom random = SecureRandom.getInstance("SHA1PRNG", "SUN");
 
@@ -191,10 +224,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
                 generator.init(256, random);
                 keystore.setKeyEntry(key.name(), generator.generateKey(), KEY_PASSWORD.getPassword(), null);
                 updated = true;
-            } else {
-                byte[] encodedKey = keystore.getKey(key.name(), KEY_PASSWORD.getPassword()).getEncoded();
-                LOG.trace("Key {} digest {}", key.name(), Base64.getEncoder().encodeToString(md5.digest(encodedKey)));
-            }
+            } 
         }
 
         for (RequiredKeyPairs keypair : requiredKeyPairs.getEnumConstants()) {
@@ -211,12 +241,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
                 keystore.setCertificateEntry(cn, certificate);
                 publishCertificate(certificate);
                 updated = true;
-            } else {
-                byte[] encodedKey = keystore.getKey(keypair.name(), KEY_PASSWORD.getPassword()).getEncoded();
-                LOG.trace("PrivateKey {} digest {}", keypair.name(), Base64.getEncoder().encodeToString(md5.digest(encodedKey)));
-                byte[] encodedCert = keystore.getCertificate(keypair.name()).getEncoded();
-                LOG.trace("Certificate {} digest {}", keypair.name(), Base64.getEncoder().encodeToString(md5.digest(encodedCert)));
-            }
+            } 
         }
         
         for (X509Certificate cert : importCertificates()) {
@@ -226,6 +251,8 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
                 updated = true;
             }
         }
+        
+        dumpKeystore(keystore);
              
         LOG.trace("init exiting with {}", updated);
         return updated; 
@@ -239,7 +266,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         KeyStoreException, 
         NoSuchProviderException, 
         CertIOException, 
-        UnrecoverableKeyException,
+        UnrecoverableEntryException,
         OperatorCreationException {
         LOG.trace("entering load");
 
