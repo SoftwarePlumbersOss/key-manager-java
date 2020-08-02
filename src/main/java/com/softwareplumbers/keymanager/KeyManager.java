@@ -163,14 +163,19 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         return Stream.of(enumClass.getEnumConstants()).map(Object::toString).toArray(String[]::new);
     }
     
-    private static String keyDigest(Key key) {
-        try {
-            MessageDigest md5 = MessageDigest.getInstance("MD5");
-            return Base64.getEncoder().withoutPadding().encodeToString(md5.digest(key.getEncoded()));
-        } catch (NoSuchAlgorithmException e) {
-            // this API has WAAAAAY too many checked exceptions.
-            throw new RuntimeException(e);
-        }
+    private static Object keyDigest(Key key) {
+        return new Object() {
+            @Override
+            public String toString() {
+                try {
+                    MessageDigest md5 = MessageDigest.getInstance("MD5");
+                    return Base64.getEncoder().withoutPadding().encodeToString(md5.digest(key.getEncoded()));
+                } catch (NoSuchAlgorithmException e) {
+                    // this API has WAAAAAY too many checked exceptions.
+                    throw new RuntimeException(e);
+                }
+            }
+        };
     }
     
     private static void dumpKeystore(KeyStore keystore) throws KeyStoreException, NoSuchAlgorithmException, UnrecoverableEntryException {
@@ -397,14 +402,16 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         try {
             if (getKeyStore().isCertificateEntry(name)) {
                 Certificate cert = getKeyStore().getCertificate(name);
-                return cert.getPublicKey();
+                Key key = cert.getPublicKey();
+                LOG.trace("getKey returns key digest {}", keyDigest(key));
+                return key;
             } else {
                 Key key = getKeyStore().getKey(name, KEY_PASSWORD.getPassword());
                 if (key instanceof PrivateKey) {
                     Certificate cert = getKeyStore().getCertificate(name);
                     key =  cert.getPublicKey();                    
                 }
-                LOG.trace("getKey returns", "<redacted>");
+                LOG.trace("getKey returns key digest {}", keyDigest(key));
                 return key;
             }
         } catch (NoSuchAlgorithmException | UnrecoverableEntryException | KeyStoreException e) {
@@ -445,7 +452,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         try {
             Key key = getKeyStore().getKey(name, KEY_PASSWORD.getPassword());
             Certificate cert = getKeyStore().getCertificate(name);
-            LOG.trace("getKeyPair returns", "<redacted>");
+            LOG.trace("getKeyPair returns key digests: private({}), public({})", keyDigest(key), keyDigest(cert.getPublicKey()));
             return new KeyPair(cert.getPublicKey(), (PrivateKey)key);
         } catch (NoSuchAlgorithmException | UnrecoverableEntryException | KeyStoreException e) {
             LOG.debug("getKeyPair rethrows {}", e);
