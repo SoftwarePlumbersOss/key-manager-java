@@ -165,6 +165,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     }
     
     private static Object keyDigest(Key key) {
+        if (key == null) return null;
         return new Object() {
             @Override
             public String toString() {
