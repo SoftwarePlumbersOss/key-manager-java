@@ -39,6 +39,7 @@ import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Enumeration;
 import java.util.Iterator;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
@@ -179,9 +180,9 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     }
     
     private static void dumpKeystore(KeyStore keystore) throws KeyStoreException, NoSuchAlgorithmException, UnrecoverableEntryException {
-        Iterator<String> aliases = keystore.aliases().asIterator();
-        while (aliases.hasNext()) {
-            String alias = aliases.next();
+        Enumeration<String> aliases = keystore.aliases();
+        while (aliases.hasMoreElements()) {
+            String alias = aliases.nextElement();
             Entry entry = keystore.isCertificateEntry(alias) ? keystore.getEntry(alias, null) : keystore.getEntry(alias, KEY_PASSWORD);
             if (entry instanceof TrustedCertificateEntry) {
                 TrustedCertificateEntry tce = (TrustedCertificateEntry)entry;
