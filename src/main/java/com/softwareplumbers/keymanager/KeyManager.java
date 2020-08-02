@@ -449,11 +449,20 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
      */
     public String getPublishedName(RequiredKeyPairs name) {
         try {
-            Certificate[] certs = getKeyStore().getCertificateChain(name.name());
-            return extractName((X509Certificate)certs[0]);
-        } catch (InitializationFailure | KeyStoreException e) {
+            return getPublishedName(name.name());
+        } catch (BadKeyException | InitializationFailure e) {
             throw new RuntimeException(e.getCause());
         }
+    }
+    
+    public String getPublishedName(String name) throws BadKeyException, InitializationFailure {
+        try {
+            Certificate[] certs = getKeyStore().getCertificateChain(name);
+            return extractName((X509Certificate)certs[0]);
+        } catch (KeyStoreException e) {
+            LOG.debug("getKeyPair rethrows {}", e);
+            throw new BadKeyException(e);
+        } 
     }
     
     /** Get a key from the key store.

@@ -118,6 +118,12 @@ public class KeyManagerTest {
     }
     
     @Test
+    public void testGetPublishedName() throws KeyStoreException, BadKeyException, InitializationFailure, NoSuchAlgorithmException, NoSuchProviderException, InvalidKeyException, SignatureException {
+        KeyManager<NO_KEYS,TestKeyPair> kmgr = new KeyManager<>(file.toString(), folder.toString(), "password", NO_KEYS.class, TestKeyPair.class);
+        assertEquals(kmgr.getPublishedName(TestKeyPair.KeyPairA), kmgr.getPublishedName("KeyPairA"));
+    }
+
+    @Test
     public void testSharedKeystoreMessageValidation() throws KeyStoreException, BadKeyException, InitializationFailure, NoSuchAlgorithmException, NoSuchProviderException, InvalidKeyException, SignatureException {
         KeyManager<NO_KEYS,TestKeyPair> kmgr = new KeyManager<>(file.toString(), folder.toString(), "password", NO_KEYS.class, TestKeyPair.class);
         PrivateKey pk = kmgr.getKeyPair(TestKeyPair.KeyPairA).getPrivate();
