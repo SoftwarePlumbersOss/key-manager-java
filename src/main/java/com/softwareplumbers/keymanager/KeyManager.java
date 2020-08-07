@@ -8,6 +8,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.Key;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
@@ -38,6 +40,7 @@ import javax.crypto.KeyGenerator;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.Iterator;
@@ -89,10 +92,11 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     private Class<RequiredSecretKeys> requiredSecretKeys;
     private Class<RequiredKeyPairs> requiredKeyPairs;
     
-    private String location, password;
+    private Path location;
+    private String password;
     
     private Optional<KeyStore> keystore = Optional.empty(); 
-    private String publishLocation = null;
+    private Path publishLocation = null;
     private SecureRandom randomizer = new SecureRandom();
     
     private KeyStore getKeyStore() throws InitializationFailure {
@@ -277,7 +281,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         OperatorCreationException {
         LOG.trace("entering load");
 
-        File file = new File(location);
+        File file = location.toFile();
         KeyStore keystore = KeyStore.getInstance("JCEKS");
 
         if (file.exists()) {
@@ -312,9 +316,9 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     
     private void publishCertificate(X509Certificate certificate) {
         if (this.publishLocation != null) {
-            File publishDir = new File(publishLocation);
+            File publishDir = publishLocation.toFile();
             publishDir.mkdirs();
-            File certFile = new File(publishLocation, extractName(certificate) + ".der");
+            File certFile = publishLocation.resolve(extractName(certificate) + ".der").toFile();
             try (OutputStream os = Base64.getUrlEncoder().wrap(new FileOutputStream(certFile))) {
                 os.write(certificate.getEncoded());
             } catch (IOException | CertificateEncodingException e) {
@@ -327,7 +331,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
     
     private Iterable<X509Certificate> importCertificates() throws IOException, CertificateException {
         if (this.publishLocation != null) {
-            File publishDir = new File(publishLocation);
+            File publishDir = publishLocation.toFile();
             publishDir.mkdirs();
             if (!publishDir.isDirectory() || !publishDir.canWrite()) throw new IOException("supplied publish location is unusable");
             ArrayList<X509Certificate> certs = new ArrayList<>();
@@ -347,7 +351,18 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
      */
     public void setLocation(String location) { 
         LOG.trace("entering setLocation ({})", location);
-        this.location = location; 
+        this.location = Paths.get(location);
+        keystore = Optional.empty(); 
+    }
+    
+    /** Set location of keystore using multiple path segments.
+     * 
+     * @param segments location (on disk...) for keystore
+     */
+    public void setLocation(String[] segments) { 
+        LOG.trace("entering setLocation ({})", Arrays.asList(segments));
+        this.location = Paths.get(segments[0]);
+        for (int i = 1; i < segments.length; i++) this.location = this.location.resolve(segments[i]);
         keystore = Optional.empty(); 
     }
     
@@ -358,9 +373,20 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
      */
     public void setPublishLocation(String publishLocation) throws IOException {
         LOG.trace("entering setPublishLocation with {}", publishLocation);
-        this.publishLocation = publishLocation;
+        this.publishLocation = Paths.get(publishLocation);
         keystore = Optional.empty(); 
     }
+    
+    /** Set location of keystore using multiple path segments.
+     * 
+     * @param segments location (on disk...) for keystore
+     */
+    public void setPublishLocation(String[] segments) { 
+        LOG.trace("entering setLocation ({})", Arrays.asList(segments));
+        this.publishLocation = Paths.get(segments[0]);
+        for (int i = 1; i < segments.length; i++) this.publishLocation = this.publishLocation.resolve(segments[i]);
+        keystore = Optional.empty(); 
+    }    
     
     /** Set password of keystore.
      * 
@@ -540,7 +566,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
      * @param keyPairs An enumeration of public/private key pairs to create in the key store
      * @throws java.security.KeyStoreException
      */
-    public KeyManager(String location, String publishLocation, String password, Class<RequiredSecretKeys> keys, Class<RequiredKeyPairs> keyPairs) throws KeyStoreException {
+    public KeyManager(Path location, Path publishLocation, String password, Class<RequiredSecretKeys> keys, Class<RequiredKeyPairs> keyPairs) throws KeyStoreException {
 
         LOG.trace("entering constructor with ({},{})", location, "<redacted>");
         Security.addProvider(BOUNCY_CASTLE);
@@ -550,6 +576,19 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         this.requiredKeyPairs = keyPairs;
         this.requiredSecretKeys = keys;
         LOG.trace("exiting constructor");
+    }
+
+    /** Create a Key Manager. 
+     * 
+     * @param location The location (Path) for the key store
+     * @param publishLocation The location (path to a directory) where public keys are published to and imported from
+     * @param password The password for the key store
+     * @param keys An enumeration of secret key names to create in the key store
+     * @param keyPairs An enumeration of public/private key pairs to create in the key store
+     * @throws java.security.KeyStoreException
+     */    
+    public KeyManager(String location, String publishLocation, String password, Class<RequiredSecretKeys> keys, Class<RequiredKeyPairs> keyPairs) throws KeyStoreException {
+        this(Paths.get(location), Paths.get(publishLocation), password, keys, keyPairs);
     }
   
     /** Create a Key Manager. 

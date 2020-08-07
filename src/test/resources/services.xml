@@ -7,10 +7,21 @@
 	http://www.springframework.org/schema/beans/spring-beans-4.3.xsd">
 	
 	<bean id ="keymgr" class="com.softwareplumbers.keymanager.KeyManager" scope="singleton">
-		<constructor-arg index="0" value="/tmp/doctane-proxy.keystore"/>
-		<constructor-arg index="1" value="password"/>
-		<constructor-arg index="2" value="com.softwareplumbers.keymanager.TestSecretKey"/>
-		<constructor-arg index="3" value="com.softwareplumbers.keymanager.TestKeyPair"/>
+            <property name="location">
+                <array>
+                    <value>#{systemProperties['installation.root']}</value>
+                    <value>doctane.keystore</value>
+                </array>
+            </property>
+            <property name="publishLocation">
+                <array>
+                    <value>#{systemProperties['installation.root']}</value>
+                    <value>certs</value>
+                </array>                
+            </property>
+            <property name="password" value="password"/>
+            <property name="requiredSecretKeys" value="com.softwareplumbers.keymanager.TestSecretKey"/>
+            <property name="requiredKeyPairs" value="com.softwareplumbers.keymanager.TestKeyPair"/>
 	</bean>
 
 </beans>
