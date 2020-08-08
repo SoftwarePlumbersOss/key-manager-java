@@ -1,14 +1,6 @@
-buildscript {
-    repositories {
-        mavenCentral()
-    }
-    dependencies {
-        classpath("org.springframework.boot:spring-boot-gradle-plugin:1.5.19.RELEASE")
-    }
-}
-
 plugins {
-  id "org.jdrupes.mdoclet" version "1.0.5"
+  id "org.springframework.boot" version "1.5.22.RELEASE" apply false
+  id "org.jdrupes.mdoclet" version "1.0.10"
 }
 
 String propValue(String propName, String defValue) {
@@ -95,8 +87,8 @@ sourceCompatibility = 1.8
 targetCompatibility = 1.8
 
 dependencies {
-    compile group: 'org.bouncycastle', name: 'bcprov-jdk15on', version: '1.54'
-    compile group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: '1.54'
+    compile group: 'org.bouncycastle', name: 'bcprov-jdk15on', version: '1.64'
+    compile group: 'org.bouncycastle', name: 'bcpkix-jdk15on', version: '1.64'
     compile group: 'org.slf4j', name: 'slf4j-api'
     testCompile group: 'junit', name: 'junit', version: '4.12'  
     testCompile group: 'org.slf4j', name: 'slf4j-jdk14', version: '1.7.28'
