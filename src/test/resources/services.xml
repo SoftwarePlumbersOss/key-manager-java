@@ -7,13 +7,13 @@
 	http://www.springframework.org/schema/beans/spring-beans-4.3.xsd">
 	
 	<bean id ="keymgr" class="com.softwareplumbers.keymanager.KeyManager" scope="singleton">
-            <property name="location">
+            <property name="locationParts">
                 <array value-type="java.lang.String">
                     <value>#{systemProperties['installation.root']}</value>
                     <value>doctane.keystore</value>
                 </array>
             </property>
-            <property name="publishLocation">
+            <property name="publishLocationParts">
                 <array value-type="java.lang.String">
                     <value>#{systemProperties['installation.root']}</value>
                     <value>certs</value>

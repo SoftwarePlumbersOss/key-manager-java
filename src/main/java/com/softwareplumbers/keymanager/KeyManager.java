@@ -359,8 +359,8 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
      * 
      * @param segments location (on disk...) for keystore
      */
-    public void setLocation(String[] segments) { 
-        LOG.trace("entering setLocation ({})", Arrays.asList(segments));
+    public void setLocationParts(String[] segments) { 
+        LOG.trace("entering setLocationParts ({})", Arrays.asList(segments));
         this.location = Paths.get(segments[0]);
         for (int i = 1; i < segments.length; i++) this.location = this.location.resolve(segments[i]);
         keystore = Optional.empty(); 
@@ -381,8 +381,8 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
      * 
      * @param segments location (on disk...) for keystore
      */
-    public void setPublishLocation(String[] segments) { 
-        LOG.trace("entering setLocation ({})", Arrays.asList(segments));
+    public void setPublishLocationParts(String[] segments) { 
+        LOG.trace("entering setLocationParts ({})", Arrays.asList(segments));
         this.publishLocation = Paths.get(segments[0]);
         for (int i = 1; i < segments.length; i++) this.publishLocation = this.publishLocation.resolve(segments[i]);
         keystore = Optional.empty(); 
