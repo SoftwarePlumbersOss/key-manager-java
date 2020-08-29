@@ -44,6 +44,10 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.Iterator;
+import java.util.Spliterator;
+import java.util.Spliterators;
+import java.util.logging.Level;
+import java.util.stream.StreamSupport;
 
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.x500.X500Name;
@@ -206,6 +210,61 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         }        
     }
     
+    private static Iterator<String> aliases(KeyStore keystore) throws KeyStoreException {
+        Enumeration<String> aliases = keystore.aliases();
+        return new Iterator<String>() {
+            @Override
+            public String next() { return aliases.nextElement(); }
+            @Override
+            public boolean hasNext() { return aliases.hasMoreElements(); }
+        };
+    }
+    
+    private static <T> Stream<T> streamOf(Iterator<T> iterator) {
+        return StreamSupport.stream(Spliterators.spliteratorUnknownSize(iterator, Spliterator.ORDERED), false);
+    }
+    
+    private static Entry getEntry(KeyStore keystore, String alias) {
+        try {
+            return keystore.isCertificateEntry(alias) ? keystore.getEntry(alias, null) : keystore.getEntry(alias, KEY_PASSWORD);
+        } catch (KeyStoreException | NoSuchAlgorithmException | UnrecoverableEntryException ex) {
+            throw new RuntimeException(ex);
+        } 
+    }
+    
+    /** Get the certificate names stored in this key manager
+     * 
+     * @return An iterator over the names of the trusted certificate entries in this key manager.
+     * @throws InitializationFailure
+     * @throws KeyStoreException 
+     */
+    public Iterator<String> getCertificateNames() throws InitializationFailure, KeyStoreException {
+        final KeyStore lks = getKeyStore();
+        return streamOf(aliases(lks)).filter(alias->getEntry(lks, alias) instanceof TrustedCertificateEntry).iterator();
+    }
+    
+    /** Get the secret key names stored in this key manager
+     * 
+     * @return An iterator over the names of the trusted certificate entries in this key manager.
+     * @throws InitializationFailure
+     * @throws KeyStoreException 
+     */
+    public Iterator<String> getSecretKeyNames() throws InitializationFailure, KeyStoreException {
+        final KeyStore lks = getKeyStore();
+        return streamOf(aliases(lks)).filter(alias->getEntry(lks, alias) instanceof SecretKeyEntry).iterator();
+    }
+    
+    /** Get the private key names stored in this key manager
+     * 
+     * @return An iterator over the names of the trusted certificate entries in this key manager.
+     * @throws InitializationFailure
+     * @throws KeyStoreException 
+     */
+    public Iterator<String> getPrivateKeyNames() throws InitializationFailure, KeyStoreException {
+        final KeyStore lks = getKeyStore();
+        return streamOf(aliases(lks)).filter(alias->getEntry(lks, alias) instanceof PrivateKeyEntry).iterator();
+    } 
+    
     /** Initialize the key store.
      * 
      * Ensures a key store contains mandatory keys and key pairs. 
@@ -355,6 +414,14 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         keystore = Optional.empty(); 
     }
     
+    /** Get the location of the keystore
+     * 
+     * @return The keystore path
+     */
+    public String getLocation() {
+        return location.toString();
+    }
+    
     /** Set location of keystore using multiple path segments.
      * 
      * @param segments location (on disk...) for keystore
@@ -375,6 +442,14 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         LOG.trace("entering setPublishLocation with {}", publishLocation);
         this.publishLocation = Paths.get(publishLocation);
         keystore = Optional.empty(); 
+    }
+    
+    /** Get the location to which the key manager will publish certificates.
+     * 
+     * @return the path on which the key manager publishes certificates.
+     */
+    public String getPublishLocation() {
+        return publishLocation.toString();
     }
     
     /** Set location of keystore using multiple path segments.
@@ -398,25 +473,49 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         keystore = Optional.empty(); 
     }
     
+    /** Set the required secret keys for this key manager.
+     * 
+     * The key manager will ensure that a key exists for every value specified in the given enum class,
+     * either reading an existing value from the keystore or creating one.
+     * 
+     * @param requiredSecretKeys 
+     */
     public void setRequiredSecretKeys(Class<RequiredSecretKeys> requiredSecretKeys) { 
         LOG.trace("entering setRequiredSecretKeys ({})", (Object)valuesOf(requiredSecretKeys));
         this.requiredSecretKeys = requiredSecretKeys; 
         keystore = Optional.empty(); 
     }
-
-    public void setRequiredSecretKeys(String requiredSecretKeys) throws ClassNotFoundException { 
-        setRequiredSecretKeys((Class<RequiredSecretKeys>)Class.forName(requiredSecretKeys)); 
-    }
     
+    /** Get the required secret keys for this key manager
+     * 
+     * @return An enum class. A key is guaranteed to exist for every value in the enum.
+     */
+    public Class<RequiredSecretKeys> getRequiredSecretKeys() {
+        return requiredSecretKeys;
+    }
+
+    
+    /** Set the required public/private key pairs for this key manager.
+     * 
+     * The key manager will ensure that a key pair exists for every value specified in the given enum class,
+     * either reading an existing value from the keystore or creating one.
+     * 
+     * @param requiredKeyPairs 
+     */
     public void setRequiredKeyPairs(Class<RequiredKeyPairs> requiredKeyPairs) { 
         LOG.trace("entering setRequiredKeyPairs ({})", (Object)valuesOf(requiredKeyPairs));
         this.requiredKeyPairs = requiredKeyPairs; 
         keystore = Optional.empty(); 
     }
-    
-    public void setRequiredKeyPairs(String requiredKeyPairs) throws ClassNotFoundException { 
-        setRequiredKeyPairs((Class<RequiredKeyPairs>)Class.forName(requiredKeyPairs)); 
+
+    /** Get the required key pairs for this key manager
+     * 
+     * @return An enum class. A key pair is guaranteed to exist for every value in the enum.
+     */
+    public Class<RequiredKeyPairs> getRequiredKeyPairs() {
+        return requiredKeyPairs;
     }
+
     
     /** Get a key from the key store.
      * 

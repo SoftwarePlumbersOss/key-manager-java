@@ -1,7 +1,6 @@
 package com.softwareplumbers.keymanager;
 
 import com.softwareplumbers.keymanager.KeyManager.NO_KEYS;
-import java.io.File;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
@@ -15,18 +14,18 @@ import java.security.KeyStoreException;
 import java.security.NoSuchAlgorithmException;
 import java.security.NoSuchProviderException;
 import java.security.PrivateKey;
-import java.security.PublicKey;
 import java.security.Signature;
 import java.security.SignatureException;
 import java.security.cert.Certificate;
 import java.security.cert.CertificateEncodingException;
 import java.security.cert.X509Certificate;
 import java.util.Base64;
+import java.util.List;
 import java.util.Random;
 import java.util.stream.Stream;
+import org.assertj.core.util.Lists;
 
 import org.junit.After;
-import org.junit.Assert;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertTrue;
 import org.junit.Before;
@@ -37,6 +36,8 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.ImportResource;
 import org.springframework.test.context.junit4.SpringRunner;
+import static org.hamcrest.MatcherAssert.*;
+import static org.hamcrest.Matchers.*;
 
 @RunWith(SpringRunner.class)
 @ImportResource({"classpath*:services.xml"})
@@ -108,6 +109,19 @@ public class KeyManagerTest {
         KeyManager<TestSecretKey,TestKeyPair> kmgr2 = new KeyManager<>(file.toString(), folder.toString(), "password", TestSecretKey.class, TestKeyPair.class);
         Key key2 = kmgr2.getKey(TestSecretKey.MySecretKeyA);
         assertEquals(key1,key2);
+    }
+
+    private static <T extends Enum<T>> String[] lowerCaseEnumConstants(Class<T> enumClass) {
+        return Stream.of(enumClass.getEnumConstants()).map(constant->constant.toString().toLowerCase()).toArray(String[]::new);
+    }
+    
+    @Test
+    public void testKeyManagerContent() throws KeyStoreException, IOException, InitializationFailure {
+        KeyManager<TestSecretKey,TestKeyPair> kmgr1 = new KeyManager<>(file.toString(), folder.toString(), "password", TestSecretKey.class, TestKeyPair.class);
+        List<String> secretKeys = Lists.newArrayList(kmgr1.getPrivateKeyNames());
+        assertThat(secretKeys, containsInAnyOrder(lowerCaseEnumConstants(TestKeyPair.class)));
+        List<String> privateKeys = Lists.newArrayList(kmgr1.getSecretKeyNames());
+        assertThat(privateKeys, containsInAnyOrder(lowerCaseEnumConstants(TestSecretKey.class)));
     }
     
     @Test
