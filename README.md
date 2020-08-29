@@ -11,11 +11,11 @@ enum KeyPairs { MYAPP_CLIENT_KEY };
 enum Keys { MYAPP_SIGNING_KEY };
 
 KeyManager<Keys,KeyPairs> keyManager = new KeyManager<>(
-	"/usr/local/myapp/keystore.jks", 
+    "/usr/local/myapp/keystore.jks", 
     "/usr/local/myapp/certs",
-	"changeme", 
-	Keys.class, 
-	KeyParis.class
+    "changeme", 
+    Keys.class, 
+    KeyParis.class
 );
 ```
 
@@ -30,7 +30,7 @@ The keys can be accessed with:
 ```
 Key mykey = keyMangager.getKey(Keys.MYAPP_SIGNING_KEY);
 KeyPair myPayPair = keyManager.getKeyPair(KeyPairs.MYAPP_CLIENT_KEY);
-Certificate myCeret = keyManager.getCertificate(KeyPairs.MYAPP_CLIENT_KEY);
+Certificate myCert = keyManager.getCertificate(KeyPairs.MYAPP_CLIENT_KEY);
 ```
 
 Other keys which exist in the key store, but are not defined in the enums, can be accessed with:
