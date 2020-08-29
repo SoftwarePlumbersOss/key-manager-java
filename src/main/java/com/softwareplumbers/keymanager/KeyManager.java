@@ -172,7 +172,7 @@ public class KeyManager<RequiredSecretKeys extends Enum<RequiredSecretKeys>, Req
         return Stream.of(enumClass.getEnumConstants()).map(Object::toString).toArray(String[]::new);
     }
     
-    private static Object keyDigest(Key key) {
+    public static Object keyDigest(Key key) {
         if (key == null) return null;
         return new Object() {
             @Override
